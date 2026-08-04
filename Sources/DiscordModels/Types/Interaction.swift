@@ -706,6 +706,10 @@ extension Interaction {
                     )
                 }
             }
+
+            func validateAsComponentsV2() -> [ValidationFailure] {
+                validate()
+            }
         }
 
         /// https://discord.com/developers/docs/components/reference#string-select
@@ -1900,6 +1904,26 @@ extension Interaction {
                     Optional<ValidationFailure>.none
                 }
             }
+
+            func validateAsComponentsV2() -> [ValidationFailure] {
+                switch self {
+                case let .button(button):
+                    return button.validateAsComponentsV2()
+                case let .section(section):
+                    return section.components.flatMap { $0.validateAsComponentsV2() }
+                        + section.accessory.validateAsComponentsV2()
+                case let .container(container):
+                    if let componentsV2 = container.componentsV2 {
+                        return componentsV2.flatMap { $0.validateAsComponentsV2() }
+                    } else {
+                        return container.components.flatMap { $0.validateAsComponentsV2() }
+                    }
+                case let .label(label):
+                    return label.component.validateAsComponentsV2()
+                default:
+                    return validate()
+                }
+            }
         }
 
         public var components: [Component]
@@ -1965,7 +1989,19 @@ extension Interaction {
         }
 
         public func validate() -> [ValidationFailure] {
-            validateElementCountInRange(components, min: 1, max: 5, name: "components")
+            components.validate()
+        }
+
+        func validateAsComponentsV2() -> [ValidationFailure] {
+            var failures: [ValidationFailure] = []
+            if let failure = validateElementCountInRange(
+                components,
+                min: 1,
+                max: 5,
+                name: "components"
+            ) {
+                failures.append(failure)
+            }
             let hasOnlyButtons = components.allSatisfy {
                 if case .button = $0 { return true }
                 return false
@@ -1980,13 +2016,16 @@ extension Interaction {
                         return false
                     }
                 }
-            validateHasPrecondition(
+            if let failure = validateHasPrecondition(
                 condition: !hasOnlyButtons && !hasSingleSelect,
                 allowedIf: false,
                 name: "components",
                 reason: "Must contain up to five buttons or one select component"
-            )
-            components.validate()
+            ) {
+                failures.append(failure)
+            }
+            failures += components.flatMap { $0.validateAsComponentsV2() }
+            return failures
         }
     }
 
@@ -2027,6 +2066,15 @@ extension Interaction {
                 actionRow.validate()
             case let .component(component):
                 component.validate()
+            }
+        }
+
+        func validateAsComponentsV2() -> [ValidationFailure] {
+            switch self {
+            case let .actionRow(actionRow):
+                return actionRow.validateAsComponentsV2()
+            case let .component(component):
+                return component.validateAsComponentsV2()
             }
         }
 
@@ -2106,16 +2154,17 @@ extension Interaction {
                 Optional<ValidationFailure>.none
             }
         }
+
     }
 }
 
 extension Array where Element == Interaction.MessageLayoutComponent {
     func validateAsMessageComponents() -> [ValidationFailure] {
-        flatMap { $0.validateAsMessageComponent() }
+        flatMap { $0.validateAsMessageComponent() + $0.validateAsComponentsV2() }
     }
 
     func validateAsContainerChildren() -> [ValidationFailure] {
-        flatMap { $0.validateAsContainerChild() }
+        flatMap { $0.validateAsContainerChild() + $0.validateAsComponentsV2() }
     }
 
     func customIDs() -> [String] {

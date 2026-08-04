@@ -927,7 +927,10 @@ class DiscordModelsTests: XCTestCase {
                 }
             )
 
-            XCTAssertFalse(actionRow.validate().isEmpty)
+            XCTAssertTrue(actionRow.validate().isEmpty)
+
+            let payload = Payloads.CreateMessage(componentsV2: [.actionRow(actionRow)])
+            XCTAssertFalse(payload.validate().isEmpty)
         }
     }
 

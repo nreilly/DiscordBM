@@ -251,9 +251,9 @@ public enum Payloads {
                 components?.validate()
                 componentsV2?.validate()
                 componentsV2?.validateAsMessageComponents()
-                validateUniqueCustomIDs(
-                    componentsV2?.customIDs() ?? components.map { $0.flatMap(\.components).customIDs() } ?? []
-                )
+                if let componentsV2 {
+                    validateUniqueCustomIDs(componentsV2.customIDs())
+                }
                 attachments?.validate()
                 embeds?.validate()
                 poll?.validate()
@@ -337,7 +337,9 @@ public enum Payloads {
                     : nil
                 components.validate()
                 componentsV2?.validate()
-                validateUniqueCustomIDs(componentsV2?.customIDs() ?? components.flatMap(\.components).customIDs())
+                if let componentsV2 {
+                    validateUniqueCustomIDs(componentsV2.customIDs())
+                }
             }
         }
 
@@ -709,9 +711,9 @@ public enum Payloads {
             components?.validate()
             componentsV2?.validate()
             componentsV2?.validateAsMessageComponents()
-            validateUniqueCustomIDs(
-                componentsV2?.customIDs() ?? components.map { $0.flatMap(\.components).customIDs() } ?? []
-            )
+            if let componentsV2 {
+                validateUniqueCustomIDs(componentsV2.customIDs())
+            }
             attachments?.validate()
             embeds?.validate()
             poll?.validate()
