@@ -932,6 +932,64 @@ class DiscordModelsTests: XCTestCase {
             let payload = Payloads.CreateMessage(componentsV2: [.actionRow(actionRow)])
             XCTAssertFalse(payload.validate().isEmpty)
         }
+
+        do {
+            let json = """
+                {
+                  "id": "1",
+                  "channel_id": "2",
+                  "content": "",
+                  "timestamp": "2026-08-05T00:00:00.000000+00:00",
+                  "tts": false,
+                  "mention_everyone": false,
+                  "mentions": [],
+                  "mention_roles": [],
+                  "attachments": [],
+                  "embeds": [],
+                  "pinned": false,
+                  "type": 0,
+                  "flags": 32768,
+                  "components": [
+                    {
+                      "type": 17,
+                      "components": [
+                        {
+                          "type": 10,
+                          "content": "Hello"
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """
+
+            let message = try JSONDecoder().decode(DiscordChannel.Message.self, from: Data(json.utf8))
+            XCTAssertNil(message.components)
+            let componentsV2 = try XCTUnwrap(message.componentsV2)
+            XCTAssertEqual(componentsV2.count, 1)
+            guard case let .component(.container(container)) = componentsV2[0] else {
+                return XCTFail("Expected a Container component")
+            }
+            XCTAssertEqual(container.componentsV2?.count, 1)
+
+            let interactionJSON = """
+                {
+                  "id": "3",
+                  "application_id": "4",
+                  "type": 3,
+                  "data": {
+                    "custom_id": "continue",
+                    "component_type": 2
+                  },
+                  "token": "token",
+                  "version": 1,
+                  "entitlements": [],
+                  "message": \(json)
+                }
+                """
+            let interaction = try JSONDecoder().decode(Interaction.self, from: Data(interactionJSON.utf8))
+            XCTAssertEqual(try XCTUnwrap(interaction.message?.componentsV2).count, 1)
+        }
     }
 
     func testInteractionDataUtilities() throws {
