@@ -758,6 +758,177 @@ class DiscordModelsTests: XCTestCase {
 
             try assertActionRowsJSONMatchesConstructed(json: json, actionRows)
         }
+
+        do {
+            let payload = Payloads.CreateMessage(
+                componentsV2: [
+                    .container(
+                        .init(components: [.textDisplay(.init(content: "Hello"))])
+                    ),
+                    .separator(.init(divider: true)),
+                ]
+            )
+
+            try assertEncodedJSONEquals(
+                payload,
+                json: """
+                    {
+                      "flags": 32768,
+                      "components": [
+                        {
+                          "type": 17,
+                          "components": [
+                            {
+                              "type": 10,
+                              "content": "Hello"
+                            }
+                          ]
+                        },
+                        {
+                          "type": 14,
+                          "divider": true
+                        }
+                      ]
+                    }
+                    """
+            )
+        }
+
+        do {
+            let payload = Payloads.InteractionResponse.Modal(
+                custom_id: "feedback",
+                title: "Feedback",
+                componentsV2: [
+                    .label(
+                        .init(
+                            label: "How was your experience?",
+                            component: .textInput(.init(custom_id: "experience"))
+                        )
+                    )
+                ]
+            )
+
+            try assertEncodedJSONEquals(
+                payload,
+                json: """
+                    {
+                      "custom_id": "feedback",
+                      "title": "Feedback",
+                      "components": [
+                        {
+                          "type": 18,
+                          "label": "How was your experience?",
+                          "component": {
+                            "type": 4,
+                            "custom_id": "experience"
+                          }
+                        }
+                      ]
+                    }
+                    """
+            )
+        }
+
+        do {
+            let payload = Payloads.InteractionResponse.Message(
+                componentsV2: [.textDisplay(.init(content: "Hello"))]
+            )
+
+            try assertEncodedJSONEquals(
+                payload,
+                json: """
+                    {
+                      "flags": 32768,
+                      "components": [
+                        {
+                          "type": 10,
+                          "content": "Hello"
+                        }
+                      ]
+                    }
+                    """
+            )
+        }
+
+        do {
+            let payload = Payloads.CreateMessage(
+                componentsV2: [
+                    .container(
+                        .init(
+                            componentsV2: [
+                                .textDisplay(.init(content: "Choose an action.")),
+                                .actionRow(
+                                    .init(
+                                        components: [
+                                            .button(
+                                                .init(
+                                                    style: .primary,
+                                                    label: "Continue",
+                                                    custom_id: "continue"
+                                                )
+                                            )
+                                        ]
+                                    )
+                                ),
+                            ]
+                        )
+                    )
+                ]
+            )
+
+            try assertEncodedJSONEquals(
+                payload,
+                json: """
+                    {
+                      "flags": 32768,
+                      "components": [
+                        {
+                          "type": 17,
+                          "components": [
+                            {
+                              "type": 10,
+                              "content": "Choose an action."
+                            },
+                            {
+                              "type": 1,
+                              "components": [
+                                {
+                                  "type": 2,
+                                  "label": "Continue",
+                                  "custom_id": "continue",
+                                  "style": 1
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                    """
+            )
+        }
+
+        do {
+            let payload = Payloads.CreateMessage(
+                componentsV2: [
+                    .component(.button(.init(style: .primary, label: "Continue", custom_id: "continue")))
+                ]
+            )
+
+            XCTAssertFalse(payload.validate().isEmpty)
+        }
+
+        do {
+            let actionRow = Interaction.ActionRow(
+                components: (0..<6).map {
+                    .button(
+                        .init(style: .primary, label: "Button \($0)", custom_id: "button-\($0)")
+                    )
+                }
+            )
+
+            XCTAssertFalse(actionRow.validate().isEmpty)
+        }
     }
 
     func testInteractionDataUtilities() throws {

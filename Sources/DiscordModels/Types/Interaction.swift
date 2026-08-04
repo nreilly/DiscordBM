@@ -679,6 +679,32 @@ extension Interaction {
                 validateCharacterCountDoesNotExceed(label, max: 80, name: "label")
                 validateCharacterCountInRangeOrNil(custom_id, min: 1, max: 100, name: "custom_id")
                 validateCharacterCountDoesNotExceed(url, max: 512, name: "url")
+                switch style {
+                case .link:
+                    validateAssertIsNotEmpty(url != nil, name: "url")
+                    validateHasPrecondition(
+                        condition: custom_id != nil || sku_id != nil,
+                        allowedIf: false,
+                        name: "custom_id,sku_id",
+                        reason: "Link buttons cannot contain 'custom_id' or 'sku_id'"
+                    )
+                case .premium:
+                    validateAssertIsNotEmpty(sku_id != nil, name: "sku_id")
+                    validateHasPrecondition(
+                        condition: custom_id != nil || label != nil || url != nil || emoji != nil,
+                        allowedIf: false,
+                        name: "custom_id,label,url,emoji",
+                        reason: "Premium buttons can only contain 'sku_id'"
+                    )
+                case .primary, .secondary, .success, .danger, .__undocumented:
+                    validateAssertIsNotEmpty(custom_id != nil, name: "custom_id")
+                    validateHasPrecondition(
+                        condition: url != nil || sku_id != nil,
+                        allowedIf: false,
+                        name: "url,sku_id",
+                        reason: "Non-link buttons cannot contain 'url' or 'sku_id'"
+                    )
+                }
             }
         }
 
@@ -1102,6 +1128,7 @@ extension Interaction {
         public struct Container: Sendable, Codable, ValidatablePayload {
             public var id: Int?
             public var components: [Component]
+            public var componentsV2: [MessageLayoutComponent]? = nil
             public var accent_color: DiscordColor?
             public var spoiler: Bool?
 
@@ -1117,8 +1144,61 @@ extension Interaction {
                 self.spoiler = spoiler
             }
 
+            public init(
+                id: Int? = nil,
+                componentsV2: [MessageLayoutComponent],
+                accent_color: DiscordColor? = nil,
+                spoiler: Bool? = nil
+            ) {
+                self.id = id
+                self.components = []
+                self.componentsV2 = componentsV2
+                self.accent_color = accent_color
+                self.spoiler = spoiler
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case id
+                case components
+                case accent_color
+                case spoiler
+            }
+
+            public init(from decoder: any Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decodeIfPresent(Int.self, forKey: .id)
+                self.accent_color = try container.decodeIfPresent(DiscordColor.self, forKey: .accent_color)
+                self.spoiler = try container.decodeIfPresent(Bool.self, forKey: .spoiler)
+                if let components = try? container.decode([Component].self, forKey: .components) {
+                    self.components = components
+                    self.componentsV2 = nil
+                } else {
+                    self.components = []
+                    self.componentsV2 = try container.decode([MessageLayoutComponent].self, forKey: .components)
+                }
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encodeIfPresent(id, forKey: .id)
+                if let componentsV2 {
+                    try container.encode(componentsV2, forKey: .components)
+                } else {
+                    try container.encode(components, forKey: .components)
+                }
+                try container.encodeIfPresent(accent_color, forKey: .accent_color)
+                try container.encodeIfPresent(spoiler, forKey: .spoiler)
+            }
+
             public func validate() -> [ValidationFailure] {
+                componentsV2 != nil && !components.isEmpty
+                    ? ValidationFailure.disallowedField(
+                        name: "components",
+                        reason: "Cannot be used with 'componentsV2'"
+                    )
+                    : nil
                 components.validate()
+                componentsV2?.validateAsContainerChildren()
             }
         }
 
@@ -1145,6 +1225,56 @@ extension Interaction {
                 validateCharacterCountDoesNotExceed(label, max: 45, name: "label")
                 validateCharacterCountDoesNotExceed(description, max: 100, name: "description")
                 component.validate()
+            }
+
+            func validateAsModalLabel() -> [ValidationFailure] {
+                var failures = validate()
+                switch component {
+                case .textInput, .stringSelect, .userSelect, .roleSelect, .mentionableSelect,
+                    .channelSelect, .fileUpload, .radioGroup, .checkboxGroup, .checkbox,
+                    .__undocumented:
+                    break
+                default:
+                    failures.append(
+                        .containsProhibitedValues(
+                            name: "component",
+                            reason: "Contains a component that cannot be used in a modal label",
+                            valuesRepresentation: "\(component)"
+                        )
+                    )
+                }
+                switch component {
+                case let .stringSelect(value):
+                    if let failure = validateHasPrecondition(
+                        condition: value.disabled != nil,
+                        allowedIf: false,
+                        name: "disabled",
+                        reason: "Cannot be used in a modal"
+                    ) {
+                        failures.append(failure)
+                    }
+                case let .userSelect(value), let .roleSelect(value), let .mentionableSelect(value):
+                    if let failure = validateHasPrecondition(
+                        condition: value.disabled != nil,
+                        allowedIf: false,
+                        name: "disabled",
+                        reason: "Cannot be used in a modal"
+                    ) {
+                        failures.append(failure)
+                    }
+                case let .channelSelect(value):
+                    if let failure = validateHasPrecondition(
+                        condition: value.disabled != nil,
+                        allowedIf: false,
+                        name: "disabled",
+                        reason: "Cannot be used in a modal"
+                    ) {
+                        failures.append(failure)
+                    }
+                default:
+                    break
+                }
+                return failures
             }
         }
 
@@ -1835,8 +1965,219 @@ extension Interaction {
         }
 
         public func validate() -> [ValidationFailure] {
+            validateElementCountInRange(components, min: 1, max: 5, name: "components")
+            let hasOnlyButtons = components.allSatisfy {
+                if case .button = $0 { return true }
+                return false
+            }
+            let hasSingleSelect =
+                components.count == 1
+                && components.allSatisfy {
+                    switch $0 {
+                    case .stringSelect, .userSelect, .roleSelect, .mentionableSelect, .channelSelect:
+                        return true
+                    default:
+                        return false
+                    }
+                }
+            validateHasPrecondition(
+                condition: !hasOnlyButtons && !hasSingleSelect,
+                allowedIf: false,
+                name: "components",
+                reason: "Must contain up to five buttons or one select component"
+            )
             components.validate()
         }
+    }
+
+    /// A component that can be placed at the top level of a message or inside a Container.
+    public enum MessageLayoutComponent: Sendable, Codable, ValidatablePayload {
+        case actionRow(ActionRow)
+        case component(ActionRow.Component)
+
+        public static func section(_ value: ActionRow.Section) -> Self { .component(.section(value)) }
+        public static func textDisplay(_ value: ActionRow.TextDisplay) -> Self { .component(.textDisplay(value)) }
+        public static func mediaGallery(_ value: ActionRow.MediaGallery) -> Self { .component(.mediaGallery(value)) }
+        public static func file(_ value: ActionRow.File) -> Self { .component(.file(value)) }
+        public static func separator(_ value: ActionRow.Separator) -> Self { .component(.separator(value)) }
+        public static func container(_ value: ActionRow.Container) -> Self { .component(.container(value)) }
+
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: ActionRow.CodingKeys.self)
+            let type = try container.decode(ActionRow.Kind.self, forKey: .type)
+            if type == .actionRow {
+                self = try .actionRow(.init(from: decoder))
+            } else {
+                self = try .component(.init(from: decoder))
+            }
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            switch self {
+            case let .actionRow(actionRow):
+                try actionRow.encode(to: encoder)
+            case let .component(component):
+                try component.encode(to: encoder)
+            }
+        }
+
+        public func validate() -> [ValidationFailure] {
+            switch self {
+            case let .actionRow(actionRow):
+                actionRow.validate()
+            case let .component(component):
+                component.validate()
+            }
+        }
+
+        func validateAsMessageComponent() -> [ValidationFailure] {
+            switch self {
+            case .actionRow, .component(.section), .component(.textDisplay), .component(.mediaGallery),
+                .component(.file), .component(.separator), .component(.container), .component(.__undocumented):
+                []
+            case .component:
+                [
+                    .containsProhibitedValues(
+                        name: "components",
+                        reason: "Contains a component that cannot be used directly in a message",
+                        valuesRepresentation: "\(self)"
+                    )
+                ]
+            }
+        }
+
+        func validateAsContainerChild() -> [ValidationFailure] {
+            switch self {
+            case .actionRow, .component(.section), .component(.textDisplay), .component(.mediaGallery),
+                .component(.file), .component(.separator), .component(.__undocumented):
+                []
+            case .component:
+                [
+                    .containsProhibitedValues(
+                        name: "components",
+                        reason: "Contains a component that cannot be used in a container",
+                        valuesRepresentation: "\(self)"
+                    )
+                ]
+            }
+        }
+    }
+
+    /// A component that can be placed at the top level of a modal.
+    public enum ModalComponent: Sendable, Codable, ValidatablePayload {
+        case textDisplay(ActionRow.TextDisplay)
+        case label(ActionRow.Label)
+        case __undocumented
+
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: ActionRow.Component.CodingKeys.self)
+            switch try container.decode(ActionRow.Kind.self, forKey: .type) {
+            case .textDisplay:
+                self = try .textDisplay(.init(from: decoder))
+            case .label:
+                self = try .label(.init(from: decoder))
+            case .__undocumented:
+                self = .__undocumented
+            default:
+                throw ActionRow.CodingError.unexpectedComponentKind(
+                    try container.decode(ActionRow.Kind.self, forKey: .type)
+                )
+            }
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            switch self {
+            case let .textDisplay(textDisplay):
+                try ActionRow.Component.textDisplay(textDisplay).encode(to: encoder)
+            case let .label(label):
+                try ActionRow.Component.label(label).encode(to: encoder)
+            case .__undocumented:
+                break
+            }
+        }
+
+        public func validate() -> [ValidationFailure] {
+            switch self {
+            case let .textDisplay(textDisplay):
+                textDisplay.validate()
+            case let .label(label):
+                label.validateAsModalLabel()
+            case .__undocumented:
+                Optional<ValidationFailure>.none
+            }
+        }
+    }
+}
+
+extension Array where Element == Interaction.MessageLayoutComponent {
+    func validateAsMessageComponents() -> [ValidationFailure] {
+        flatMap { $0.validateAsMessageComponent() }
+    }
+
+    func validateAsContainerChildren() -> [ValidationFailure] {
+        flatMap { $0.validateAsContainerChild() }
+    }
+
+    func customIDs() -> [String] {
+        flatMap { $0.customIDs() }
+    }
+}
+
+extension Interaction.MessageLayoutComponent {
+    func customIDs() -> [String] {
+        switch self {
+        case let .actionRow(actionRow):
+            actionRow.components.customIDs()
+        case let .component(component):
+            component.customIDs()
+        }
+    }
+}
+
+extension Interaction.ModalComponent {
+    func customIDs() -> [String] {
+        switch self {
+        case .textDisplay:
+            []
+        case let .label(label):
+            label.component.customIDs()
+        case .__undocumented:
+            []
+        }
+    }
+}
+
+extension Array where Element == Interaction.ModalComponent {
+    func customIDs() -> [String] {
+        flatMap { $0.customIDs() }
+    }
+}
+
+extension Interaction.ActionRow.Component {
+    func customIDs() -> [String] {
+        var customIDs = customId.map { [$0] } ?? []
+        switch self {
+        case let .section(section):
+            customIDs += section.components.customIDs()
+            customIDs += section.accessory.customIDs()
+        case let .container(container):
+            if let componentsV2 = container.componentsV2 {
+                customIDs += componentsV2.customIDs()
+            } else {
+                customIDs += container.components.customIDs()
+            }
+        case let .label(label):
+            customIDs += label.component.customIDs()
+        default:
+            break
+        }
+        return customIDs
+    }
+}
+
+extension Array where Element == Interaction.ActionRow.Component {
+    func customIDs() -> [String] {
+        flatMap { $0.customIDs() }
     }
 }
 
