@@ -992,6 +992,41 @@ class DiscordModelsTests: XCTestCase {
         }
     }
 
+    func testComponentsV2ModalSubmissionDecoding() throws {
+        let json = """
+            {
+              "id": "1",
+              "application_id": "2",
+              "type": 5,
+              "data": {
+                "custom_id": "modal",
+                "components": [
+                  {
+                    "type": 18,
+                    "label": "Name",
+                    "component": {
+                      "type": 4,
+                      "custom_id": "name",
+                      "style": 1,
+                      "value": "Nathan"
+                    }
+                  }
+                ]
+              },
+              "token": "token",
+              "version": 1,
+              "entitlements": []
+            }
+            """
+
+        let interaction = try JSONDecoder().decode(Interaction.self, from: Data(json.utf8))
+        let data = try XCTUnwrap(interaction.data)
+        let submission = try data.requireModalSubmit()
+
+        XCTAssertTrue(submission.components.isEmpty)
+        XCTAssertEqual(try XCTUnwrap(submission.componentsV2).count, 1)
+    }
+
     func testInteractionDataUtilities() throws {
         let applicationCommand: Interaction.Data = .applicationCommand(
             .init(id: "", name: "", type: .applicationCommand)

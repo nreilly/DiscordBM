@@ -223,7 +223,10 @@ public struct Interaction: Sendable, Codable {
     /// https://discord.com/developers/docs/interactions/receiving-and-responding#interaction-object-modal-submit-data-structure
     public struct ModalSubmit: Sendable, Codable {
         public var custom_id: String
-        public var components: [ActionRow]
+        @IncomingModalComponents public var components: [ActionRow]
+        public var componentsV2: [ModalComponent]? {
+            $components.componentsV2
+        }
         public var resolved: Interaction.ApplicationCommand.ResolvedData?
     }
 
