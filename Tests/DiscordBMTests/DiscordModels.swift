@@ -847,6 +847,25 @@ class DiscordModelsTests: XCTestCase {
         }
 
         do {
+            let payload = Payloads.InteractionResponse.Modal(
+                custom_id: "feedback",
+                title: "Feedback",
+                componentsV2: [
+                    .label(
+                        .init(
+                            label: "How was your experience?",
+                            component: .textInput(
+                                .init(custom_id: "experience", label: "Experience")
+                            )
+                        )
+                    )
+                ]
+            )
+
+            XCTAssertFalse(payload.validate().isEmpty)
+        }
+
+        do {
             let payload = Payloads.InteractionResponse.Message(
                 componentsV2: [.textDisplay(.init(content: "Hello"))]
             )

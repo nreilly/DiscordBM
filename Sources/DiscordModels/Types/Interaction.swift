@@ -1298,6 +1298,15 @@ extension Interaction {
                     )
                 }
                 switch component {
+                case let .textInput(value):
+                    if let failure = validateHasPrecondition(
+                        condition: value.label != nil,
+                        allowedIf: false,
+                        name: "component.label",
+                        reason: "Cannot set a Text Input label in a modal label"
+                    ) {
+                        failures.append(failure)
+                    }
                 case let .stringSelect(value):
                     if let failure = validateHasPrecondition(
                         condition: value.disabled != nil,
