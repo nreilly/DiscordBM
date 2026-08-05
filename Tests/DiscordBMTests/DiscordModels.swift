@@ -1010,6 +1010,26 @@ class DiscordModelsTests: XCTestCase {
                       "custom_id": "payment-method",
                       "value": "bank"
                     }
+                  },
+                  {
+                    "type": 18,
+                    "id": 3,
+                    "component": {
+                      "type": 22,
+                      "id": 4,
+                      "custom_id": "report-options",
+                      "values": ["payout"]
+                    }
+                  },
+                  {
+                    "type": 18,
+                    "id": 5,
+                    "component": {
+                      "type": 23,
+                      "id": 6,
+                      "custom_id": "confirm",
+                      "value": true
+                    }
                   }
                 ]
               },
@@ -1024,7 +1044,7 @@ class DiscordModelsTests: XCTestCase {
         let submission = try data.requireModalSubmit()
 
         XCTAssertTrue(submission.components.isEmpty)
-        XCTAssertEqual(try XCTUnwrap(submission.componentsV2).count, 1)
+        XCTAssertEqual(try XCTUnwrap(submission.componentsV2).count, 3)
     }
 
     func testInteractionDataUtilities() throws {
