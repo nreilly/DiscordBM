@@ -212,7 +212,7 @@ extension ValidatablePayload {
     ) -> [ValidationFailure] {
         guard flags?.contains(.isComponentsV2) ?? false else { return [] }
 
-        func countComponents(_ components: [Interaction.ActionRow.Component]?) -> Int {
+        func componentsCount(_ components: [Interaction.ActionRow.Component]?) -> Int {
             (components ?? []).reduce(into: 0) { result, element in
                 result += 1
                 switch element {
@@ -222,35 +222,35 @@ extension ValidatablePayload {
                     .__undocumented:
                     break
                 case .section(let section):
-                    result += countComponents(section.components)
-                    result += countComponents([section.accessory])
+                    result += componentsCount(section.components)
+                    result += componentsCount([section.accessory])
                 case .container(let container):
                     if let containerComponents = container.componentsV2 {
-                        result += countComponents(containerComponents)
+                        result += componentsCount(containerComponents)
                     } else {
-                        result += countComponents(container.components)
+                        result += componentsCount(container.components)
                     }
                 }
             }
         }
 
-        func countComponents(_ components: [Interaction.MessageLayoutComponent]) -> Int {
+        func componentsCount(_ components: [Interaction.MessageLayoutComponent]) -> Int {
             components.reduce(into: 0) { result, element in
                 switch element {
                 case let .actionRow(actionRow):
-                    result += 1 + countComponents(actionRow.components)
+                    result += 1 + componentsCount(actionRow.components)
                 case let .component(component):
-                    result += countComponents([component])
+                    result += componentsCount([component])
                 }
             }
         }
 
         let componentCount: Int
         if let componentsV2 {
-            componentCount = countComponents(componentsV2)
+            componentCount = componentsCount(componentsV2)
         } else {
             componentCount = (components ?? []).reduce(into: 0) { result, element in
-                result += 1 + countComponents(element.components)
+                result += 1 + componentsCount(element.components)
             }
         }
 
