@@ -245,18 +245,23 @@ extension ValidatablePayload {
             }
         }
 
-        let componentCount: Int
+        let totalComponentCount: Int
         if let componentsV2 {
-            componentCount = componentsCount(componentsV2)
+            totalComponentCount = componentsCount(componentsV2)
         } else {
-            componentCount = (components ?? []).reduce(into: 0) { result, element in
+            totalComponentCount = (components ?? []).reduce(into: 0) { result, element in
                 result += 1 + componentsCount(element.components)
             }
         }
 
         var failures: [ValidationFailure] = []
 
-        if let failure = validateNumberInRangeOrNil(componentCount, min: 0, max: 40, name: "components.count") {
+        if let failure = validateNumberInRangeOrNil(
+            totalComponentCount,
+            min: 0,
+            max: 40,
+            name: "components.count"
+        ) {
             failures.append(failure)
         }
 
