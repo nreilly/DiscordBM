@@ -757,6 +757,18 @@ extension Interaction {
             public var disabled: Bool?
             public var values: [String]?
 
+            enum CodingKeys: String, CodingKey {
+                case id
+                case custom_id
+                case options
+                case placeholder
+                case min_values
+                case max_values
+                case required
+                case disabled
+                case values
+            }
+
             public init(
                 id: Int? = nil,
                 custom_id: String,
@@ -776,6 +788,20 @@ extension Interaction {
                 self.required = required
                 self.disabled = disabled
                 self.values = nil
+            }
+
+            public init(from decoder: any Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decodeIfPresent(Int.self, forKey: .id)
+                self.custom_id = try container.decode(String.self, forKey: .custom_id)
+                // Discord omits the configured options from String Select interaction responses.
+                self.options = try container.decodeIfPresent([Option].self, forKey: .options) ?? []
+                self.placeholder = try container.decodeIfPresent(String.self, forKey: .placeholder)
+                self.min_values = try container.decodeIfPresent(Int.self, forKey: .min_values)
+                self.max_values = try container.decodeIfPresent(Int.self, forKey: .max_values)
+                self.required = try container.decodeIfPresent(Bool.self, forKey: .required)
+                self.disabled = try container.decodeIfPresent(Bool.self, forKey: .disabled)
+                self.values = try container.decodeIfPresent([String].self, forKey: .values)
             }
 
             public func validate() -> [ValidationFailure] {

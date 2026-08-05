@@ -1167,6 +1167,16 @@ class DiscordModelsTests: XCTestCase {
                       "custom_id": "confirm",
                       "value": true
                     }
+                  },
+                  {
+                    "type": 18,
+                    "id": 7,
+                    "component": {
+                      "type": 3,
+                      "id": 8,
+                      "custom_id": "favourite-colour",
+                      "values": ["blue"]
+                    }
                   }
                 ]
               },
@@ -1181,7 +1191,16 @@ class DiscordModelsTests: XCTestCase {
         let submission = try data.requireModalSubmit()
 
         XCTAssertTrue(submission.components.isEmpty)
-        XCTAssertEqual(try XCTUnwrap(submission.componentsV2).count, 3)
+        let components = try XCTUnwrap(submission.componentsV2)
+        XCTAssertEqual(components.count, 4)
+
+        guard case let .label(label) = components[3],
+            case let .stringSelect(stringSelect) = label.component
+        else {
+            return XCTFail("Expected a String Select in the final label")
+        }
+        XCTAssertTrue(stringSelect.options.isEmpty)
+        XCTAssertEqual(stringSelect.values, ["blue"])
     }
 
     func testInteractionDataUtilities() throws {
