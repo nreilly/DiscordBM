@@ -1216,6 +1216,13 @@ extension Interaction {
             public var description: String?
             public var component: Component
 
+            enum CodingKeys: String, CodingKey {
+                case id
+                case label
+                case description
+                case component
+            }
+
             public init(
                 id: Int? = nil,
                 label: String,
@@ -1226,6 +1233,15 @@ extension Interaction {
                 self.label = label
                 self.description = description
                 self.component = component
+            }
+
+            public init(from decoder: any Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decodeIfPresent(Int.self, forKey: .id)
+                // Discord omits display-only fields from a modal submission.
+                self.label = try container.decodeIfPresent(String.self, forKey: .label) ?? ""
+                self.description = try container.decodeIfPresent(String.self, forKey: .description)
+                self.component = try container.decode(Component.self, forKey: .component)
             }
 
             public func validate() -> [ValidationFailure] {

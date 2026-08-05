@@ -1003,12 +1003,12 @@ class DiscordModelsTests: XCTestCase {
                 "components": [
                   {
                     "type": 18,
-                    "label": "Name",
+                    "id": 1,
                     "component": {
-                      "type": 4,
-                      "custom_id": "name",
-                      "style": 1,
-                      "value": "Nathan"
+                      "type": 21,
+                      "id": 2,
+                      "custom_id": "payment-method",
+                      "value": "bank"
                     }
                   }
                 ]
