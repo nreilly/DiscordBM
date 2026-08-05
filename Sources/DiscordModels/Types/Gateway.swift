@@ -1297,11 +1297,7 @@ public struct Gateway: Sendable, Codable {
             }
             self.interaction = partialMessage.interaction
             self.thread = partialMessage.thread
-            if let componentsV2 = partialMessage.componentsV2 {
-                self.$components = .init(componentsV2: componentsV2)
-            } else {
-                self.components = partialMessage.components
-            }
+            self.$components = partialMessage.$components
             self.sticker_items = partialMessage.sticker_items
             self.stickers = partialMessage.stickers
             self.position = partialMessage.position

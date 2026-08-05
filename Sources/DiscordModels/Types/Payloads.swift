@@ -253,6 +253,7 @@ public enum Payloads {
                 componentsV2?.validateAsMessageComponents()
                 if let componentsV2 {
                     validateUniqueCustomIDs(componentsV2.customIDs())
+                    validateUniqueComponentIDs(componentsV2.componentIDs())
                 }
                 attachments?.validate()
                 embeds?.validate()
@@ -339,6 +340,7 @@ public enum Payloads {
                 componentsV2?.validate()
                 if let componentsV2 {
                     validateUniqueCustomIDs(componentsV2.customIDs())
+                    validateUniqueComponentIDs(componentsV2.componentIDs())
                 }
             }
         }
@@ -713,6 +715,7 @@ public enum Payloads {
             componentsV2?.validateAsMessageComponents()
             if let componentsV2 {
                 validateUniqueCustomIDs(componentsV2.customIDs())
+                validateUniqueComponentIDs(componentsV2.componentIDs())
             }
             attachments?.validate()
             embeds?.validate()
@@ -727,6 +730,7 @@ public enum Payloads {
         public var flags: IntBitField<DiscordChannel.Message.Flag>?
         public var allowed_mentions: AllowedMentions?
         public var components: [Interaction.ActionRow]?
+        public var componentsV2: [Interaction.MessageLayoutComponent]? = nil
         public var files: [RawFile]?
         public var attachments: [Attachment]?
 
@@ -757,6 +761,42 @@ public enum Payloads {
             self.attachments = attachments
         }
 
+        public init(
+            content: String? = nil,
+            embeds: [Embed]? = nil,
+            flags: IntBitField<DiscordChannel.Message.Flag>? = nil,
+            allowed_mentions: AllowedMentions? = nil,
+            componentsV2: [Interaction.MessageLayoutComponent],
+            files: [RawFile]? = nil,
+            attachments: [Attachment]? = nil
+        ) {
+            self.content = content
+            self.embeds = embeds
+            self.flags = Payloads.messageFlags(flags, componentsV2: componentsV2)
+            self.allowed_mentions = allowed_mentions
+            self.components = nil
+            self.componentsV2 = componentsV2
+            self.files = files
+            self.attachments = attachments
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encodeIfPresent(content, forKey: .content)
+            try container.encodeIfPresent(embeds, forKey: .embeds)
+            try container.encodeIfPresent(
+                Payloads.messageFlags(flags, componentsV2: componentsV2),
+                forKey: .flags
+            )
+            try container.encodeIfPresent(allowed_mentions, forKey: .allowed_mentions)
+            if let componentsV2 {
+                try container.encode(componentsV2, forKey: .components)
+            } else {
+                try container.encodeIfPresent(components, forKey: .components)
+            }
+            try container.encodeIfPresent(attachments, forKey: .attachments)
+        }
+
         public func validate() -> [ValidationFailure] {
             validateElementCountDoesNotExceed(embeds, max: 10, name: "embeds")
             validateCharacterCountDoesNotExceed(content, max: 2_000, name: "content")
@@ -773,16 +813,29 @@ public enum Payloads {
             )
             validateComponentsV2Payload(
                 components: components,
-                flags: flags,
+                componentsV2: componentsV2,
+                flags: Payloads.messageFlags(flags, componentsV2: componentsV2),
                 hasContent: !(content?.isEmpty ?? true),
                 hasEmbeds: !(embeds?.isEmpty ?? true),
                 hasStickers: false,
                 hasPoll: false
             )
+            components != nil && componentsV2 != nil
+                ? ValidationFailure.disallowedField(
+                    name: "components",
+                    reason: "Cannot be used with 'componentsV2'"
+                )
+                : nil
             allowed_mentions?.validate()
             attachments?.validate()
             embeds?.validate()
             components?.validate()
+            componentsV2?.validate()
+            componentsV2?.validateAsMessageComponents()
+            if let componentsV2 {
+                validateUniqueCustomIDs(componentsV2.customIDs())
+                validateUniqueComponentIDs(componentsV2.componentIDs())
+            }
         }
     }
 
@@ -795,6 +848,7 @@ public enum Payloads {
         public var embeds: [Embed]?
         public var allowed_mentions: AllowedMentions?
         public var components: [Interaction.ActionRow]?
+        public var componentsV2: [Interaction.MessageLayoutComponent]? = nil
         public var files: [RawFile]?
         public var attachments: [Attachment]?
         public var flags: IntBitField<DiscordChannel.Message.Flag>?
@@ -847,17 +901,73 @@ public enum Payloads {
             self.poll = poll
         }
 
+        public init(
+            content: String? = nil,
+            username: String? = nil,
+            avatar_url: String? = nil,
+            tts: Bool? = nil,
+            embeds: [Embed]? = nil,
+            allowed_mentions: AllowedMentions? = nil,
+            componentsV2: [Interaction.MessageLayoutComponent],
+            files: [RawFile]? = nil,
+            attachments: [Attachment]? = nil,
+            flags: IntBitField<DiscordChannel.Message.Flag>? = nil,
+            thread_name: String? = nil,
+            applied_tags: [ForumTagSnowflake]? = nil,
+            poll: CreatePollRequest? = nil
+        ) {
+            self.content = content
+            self.username = username
+            self.avatar_url = avatar_url
+            self.tts = tts
+            self.embeds = embeds
+            self.allowed_mentions = allowed_mentions
+            self.components = nil
+            self.componentsV2 = componentsV2
+            self.files = files
+            self.attachments = attachments
+            self.flags = Payloads.messageFlags(flags, componentsV2: componentsV2)
+            self.thread_name = thread_name
+            self.applied_tags = applied_tags
+            self.poll = poll
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encodeIfPresent(content, forKey: .content)
+            try container.encodeIfPresent(username, forKey: .username)
+            try container.encodeIfPresent(avatar_url, forKey: .avatar_url)
+            try container.encodeIfPresent(tts, forKey: .tts)
+            try container.encodeIfPresent(embeds, forKey: .embeds)
+            try container.encodeIfPresent(allowed_mentions, forKey: .allowed_mentions)
+            if let componentsV2 {
+                try container.encode(componentsV2, forKey: .components)
+            } else {
+                try container.encodeIfPresent(components, forKey: .components)
+            }
+            try container.encodeIfPresent(attachments, forKey: .attachments)
+            try container.encodeIfPresent(
+                Payloads.messageFlags(flags, componentsV2: componentsV2),
+                forKey: .flags
+            )
+            try container.encodeIfPresent(thread_name, forKey: .thread_name)
+            try container.encodeIfPresent(applied_tags, forKey: .applied_tags)
+            try container.encodeIfPresent(poll, forKey: .poll)
+        }
+
         public func validate() -> [ValidationFailure] {
             validateElementCountDoesNotExceed(embeds, max: 10, name: "embeds")
             validateCharacterCountDoesNotExceed(content, max: 2_000, name: "content")
             validateAtLeastOneIsNotEmpty(
                 content?.isEmpty,
                 components?.isEmpty,
+                componentsV2?.isEmpty,
                 files?.isEmpty,
                 embeds?.isEmpty,
                 poll?.answers.isEmpty,
                 names: "content",
                 "components",
+                "componentsV2",
                 "files",
                 "embeds",
                 "poll"
@@ -875,13 +985,26 @@ public enum Payloads {
             )
             validateComponentsV2Payload(
                 components: components,
-                flags: flags,
+                componentsV2: componentsV2,
+                flags: Payloads.messageFlags(flags, componentsV2: componentsV2),
                 hasContent: !(content?.isEmpty ?? true),
                 hasEmbeds: !(embeds?.isEmpty ?? true),
                 hasStickers: false,
                 hasPoll: poll != nil
             )
+            components != nil && componentsV2 != nil
+                ? ValidationFailure.disallowedField(
+                    name: "components",
+                    reason: "Cannot be used with 'componentsV2'"
+                )
+                : nil
             components?.validate()
+            componentsV2?.validate()
+            componentsV2?.validateAsMessageComponents()
+            if let componentsV2 {
+                validateUniqueCustomIDs(componentsV2.customIDs())
+                validateUniqueComponentIDs(componentsV2.componentIDs())
+            }
             allowed_mentions?.validate()
             attachments?.validate()
             embeds?.validate()
@@ -942,8 +1065,10 @@ public enum Payloads {
     public struct EditWebhookMessage: Sendable, MultipartEncodable, ValidatablePayload {
         public var content: String?
         public var embeds: [Embed]?
+        public var flags: IntBitField<DiscordChannel.Message.Flag>?
         public var allowed_mentions: AllowedMentions?
         public var components: [Interaction.ActionRow]?
+        public var componentsV2: [Interaction.MessageLayoutComponent]? = nil
         public var files: [RawFile]?
         public var attachments: [Attachment]?
         public var poll: CreatePollRequest?
@@ -951,6 +1076,7 @@ public enum Payloads {
         enum CodingKeys: String, CodingKey {
             case content
             case embeds
+            case flags
             case allowed_mentions
             case components
             case attachments
@@ -960,6 +1086,7 @@ public enum Payloads {
         public init(
             content: String? = nil,
             embeds: [Embed]? = nil,
+            flags: IntBitField<DiscordChannel.Message.Flag>? = nil,
             allowed_mentions: AllowedMentions? = nil,
             components: [Interaction.ActionRow]? = nil,
             files: [RawFile]? = nil,
@@ -968,11 +1095,51 @@ public enum Payloads {
         ) {
             self.content = content
             self.embeds = embeds
+            self.flags = flags
             self.allowed_mentions = allowed_mentions
             self.components = components
             self.files = files
             self.attachments = attachments
             self.poll = poll
+        }
+
+        public init(
+            content: String? = nil,
+            embeds: [Embed]? = nil,
+            flags: IntBitField<DiscordChannel.Message.Flag>? = nil,
+            allowed_mentions: AllowedMentions? = nil,
+            componentsV2: [Interaction.MessageLayoutComponent],
+            files: [RawFile]? = nil,
+            attachments: [Attachment]? = nil,
+            poll: CreatePollRequest? = nil
+        ) {
+            self.content = content
+            self.embeds = embeds
+            self.flags = Payloads.messageFlags(flags, componentsV2: componentsV2)
+            self.allowed_mentions = allowed_mentions
+            self.components = nil
+            self.componentsV2 = componentsV2
+            self.files = files
+            self.attachments = attachments
+            self.poll = poll
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encodeIfPresent(content, forKey: .content)
+            try container.encodeIfPresent(embeds, forKey: .embeds)
+            try container.encodeIfPresent(
+                Payloads.messageFlags(flags, componentsV2: componentsV2),
+                forKey: .flags
+            )
+            try container.encodeIfPresent(allowed_mentions, forKey: .allowed_mentions)
+            if let componentsV2 {
+                try container.encode(componentsV2, forKey: .components)
+            } else {
+                try container.encodeIfPresent(components, forKey: .components)
+            }
+            try container.encodeIfPresent(attachments, forKey: .attachments)
+            try container.encodeIfPresent(poll, forKey: .poll)
         }
 
         public func validate() -> [ValidationFailure] {
@@ -983,9 +1150,38 @@ public enum Payloads {
                 max: 6_000,
                 names: "embeds"
             )
+            validateOnlyContains(
+                flags,
+                name: "flags",
+                reason: "Can only contain 'suppressEmbeds' or 'isComponentsV2'",
+                allowed: [.suppressEmbeds, .isComponentsV2]
+            )
+            validateComponentsV2Payload(
+                components: components,
+                componentsV2: componentsV2,
+                flags: Payloads.messageFlags(flags, componentsV2: componentsV2),
+                hasContent: !(content?.isEmpty ?? true),
+                hasEmbeds: !(embeds?.isEmpty ?? true),
+                hasStickers: false,
+                hasPoll: poll != nil
+            )
+            components != nil && componentsV2 != nil
+                ? ValidationFailure.disallowedField(
+                    name: "components",
+                    reason: "Cannot be used with 'componentsV2'"
+                )
+                : nil
             allowed_mentions?.validate()
             attachments?.validate()
             embeds?.validate()
+            components?.validate()
+            componentsV2?.validate()
+            componentsV2?.validateAsMessageComponents()
+            if let componentsV2 {
+                validateUniqueCustomIDs(componentsV2.customIDs())
+                validateUniqueComponentIDs(componentsV2.componentIDs())
+            }
+            poll?.validate()
         }
     }
 
@@ -1056,6 +1252,7 @@ public enum Payloads {
             public var embeds: [Embed]?
             public var allowed_mentions: AllowedMentions?
             public var components: [Interaction.ActionRow]?
+            public var componentsV2: [Interaction.MessageLayoutComponent]? = nil
             public var sticker_ids: [String]?
             public var files: [RawFile]?
             public var attachments: [Attachment]?
@@ -1095,6 +1292,48 @@ public enum Payloads {
                 self.poll = poll
             }
 
+            public init(
+                content: String? = nil,
+                embeds: [Embed]? = nil,
+                allowed_mentions: AllowedMentions? = nil,
+                componentsV2: [Interaction.MessageLayoutComponent],
+                sticker_ids: [String]? = nil,
+                files: [RawFile]? = nil,
+                attachments: [Attachment]? = nil,
+                flags: IntBitField<DiscordChannel.Message.Flag>? = nil,
+                poll: CreatePollRequest? = nil
+            ) {
+                self.content = content
+                self.embeds = embeds
+                self.allowed_mentions = allowed_mentions
+                self.components = nil
+                self.componentsV2 = componentsV2
+                self.sticker_ids = sticker_ids
+                self.files = files
+                self.attachments = attachments
+                self.flags = Payloads.messageFlags(flags, componentsV2: componentsV2)
+                self.poll = poll
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encodeIfPresent(content, forKey: .content)
+                try container.encodeIfPresent(embeds, forKey: .embeds)
+                try container.encodeIfPresent(allowed_mentions, forKey: .allowed_mentions)
+                if let componentsV2 {
+                    try container.encode(componentsV2, forKey: .components)
+                } else {
+                    try container.encodeIfPresent(components, forKey: .components)
+                }
+                try container.encodeIfPresent(sticker_ids, forKey: .sticker_ids)
+                try container.encodeIfPresent(attachments, forKey: .attachments)
+                try container.encodeIfPresent(
+                    Payloads.messageFlags(flags, componentsV2: componentsV2),
+                    forKey: .flags
+                )
+                try container.encodeIfPresent(poll, forKey: .poll)
+            }
+
             public func validate() -> [ValidationFailure] {
                 validateElementCountDoesNotExceed(embeds, max: 10, name: "embeds")
                 validateElementCountDoesNotExceed(sticker_ids, max: 3, name: "sticker_ids")
@@ -1105,12 +1344,14 @@ public enum Payloads {
                     embeds?.isEmpty,
                     sticker_ids?.isEmpty,
                     components?.isEmpty,
+                    componentsV2?.isEmpty,
                     files?.isEmpty,
                     poll?.answers.isEmpty,
                     names: "content",
                     "embeds",
                     "sticker_ids",
                     "components",
+                    "componentsV2",
                     "files",
                     "poll"
                 )
@@ -1127,13 +1368,26 @@ public enum Payloads {
                 )
                 validateComponentsV2Payload(
                     components: components,
-                    flags: flags,
+                    componentsV2: componentsV2,
+                    flags: Payloads.messageFlags(flags, componentsV2: componentsV2),
                     hasContent: !(content?.isEmpty ?? true),
                     hasEmbeds: !(embeds?.isEmpty ?? true),
                     hasStickers: !(sticker_ids?.isEmpty ?? true),
                     hasPoll: poll != nil
                 )
+                components != nil && componentsV2 != nil
+                    ? ValidationFailure.disallowedField(
+                        name: "components",
+                        reason: "Cannot be used with 'componentsV2'"
+                    )
+                    : nil
                 components?.validate()
+                componentsV2?.validate()
+                componentsV2?.validateAsMessageComponents()
+                if let componentsV2 {
+                    validateUniqueCustomIDs(componentsV2.customIDs())
+                    validateUniqueComponentIDs(componentsV2.componentIDs())
+                }
                 attachments?.validate()
                 embeds?.validate()
                 poll?.validate()

@@ -189,6 +189,18 @@ extension ValidatablePayload {
     }
 
     @inlinable
+    func validateUniqueComponentIDs(_ componentIDs: [Int]) -> ValidationFailure? {
+        guard Set(componentIDs).count == componentIDs.count else {
+            return .containsProhibitedValues(
+                name: "id",
+                reason: "Must be unique within the message or modal",
+                valuesRepresentation: "\(componentIDs)"
+            )
+        }
+        return nil
+    }
+
+    @inlinable
     func validateComponentsV2Payload(
         components: [Interaction.ActionRow]?,
         componentsV2: [Interaction.MessageLayoutComponent]? = nil,
@@ -208,9 +220,10 @@ extension ValidatablePayload {
                     .channelSelect, .textDisplay, .thumbnail, .mediaGallery, .file, .separator,
                     .label, .fileUpload, .radioGroup, .checkboxGroup, .checkbox,
                     .__undocumented:
-                    result += 1
+                    break
                 case .section(let section):
                     result += countComponents(section.components)
+                    result += countComponents([section.accessory])
                 case .container(let container):
                     if let containerComponents = container.componentsV2 {
                         result += countComponents(containerComponents)

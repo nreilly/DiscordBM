@@ -417,6 +417,23 @@ class DiscordModelsTests: XCTestCase {
             try assertEncodedJSONEquals(constructed, json: json, file: file, line: line)
         }
 
+        func assertComponentsV2Payload<T: Encodable>(_ payload: T) throws {
+            try assertEncodedJSONEquals(
+                payload,
+                json: """
+                    {
+                      "flags": 32768,
+                      "components": [
+                        {
+                          "type": 10,
+                          "content": "Hello"
+                        }
+                      ]
+                    }
+                    """
+            )
+        }
+
         do {
             let json = """
                 [
@@ -934,6 +951,72 @@ class DiscordModelsTests: XCTestCase {
         }
 
         do {
+            let payload = Payloads.CreateMessage(
+                componentsV2: (0..<40).map { .textDisplay(.init(content: "Text \($0)")) }
+            )
+
+            XCTAssertTrue(payload.validate().isEmpty)
+        }
+
+        do {
+            let payload = Payloads.CreateMessage(
+                componentsV2: [
+                    .section(
+                        .init(
+                            components: [
+                                .button(
+                                    .init(style: .primary, label: "Not text", custom_id: "not-text")
+                                )
+                            ],
+                            accessory: .textDisplay(.init(content: "Not an accessory"))
+                        )
+                    )
+                ]
+            )
+
+            XCTAssertFalse(payload.validate().isEmpty)
+        }
+
+        do {
+            let payload = Payloads.CreateMessage(
+                componentsV2: [
+                    .textDisplay(.init(id: 1, content: "First")),
+                    .textDisplay(.init(id: 1, content: "Second")),
+                ]
+            )
+
+            XCTAssertFalse(payload.validate().isEmpty)
+        }
+
+        do {
+            var components = IncomingMessageComponents(
+                componentsV2: [.textDisplay(.init(content: "Components V2"))]
+            )
+            components.wrappedValue = []
+
+            XCTAssertNil(components.componentsV2)
+        }
+
+        do {
+            let payload = Payloads.EditWebhookMessage(
+                componentsV2: [.textDisplay(.init(content: "Hello"))]
+            )
+
+            try assertComponentsV2Payload(payload)
+            try assertComponentsV2Payload(
+                Payloads.EditMessage(componentsV2: [.textDisplay(.init(content: "Hello"))])
+            )
+            try assertComponentsV2Payload(
+                Payloads.ExecuteWebhook(componentsV2: [.textDisplay(.init(content: "Hello"))])
+            )
+            try assertComponentsV2Payload(
+                Payloads.CreateThreadInForumChannel.ForumMessage(
+                    componentsV2: [.textDisplay(.init(content: "Hello"))]
+                )
+            )
+        }
+
+        do {
             let json = """
                 {
                   "id": "1",
@@ -971,6 +1054,41 @@ class DiscordModelsTests: XCTestCase {
                 return XCTFail("Expected a Container component")
             }
             XCTAssertEqual(container.componentsV2?.count, 1)
+
+            let actionRowJSON = """
+                {
+                  "id": "5",
+                  "channel_id": "2",
+                  "content": "",
+                  "timestamp": "2026-08-05T00:00:00.000000+00:00",
+                  "tts": false,
+                  "mention_everyone": false,
+                  "mentions": [],
+                  "mention_roles": [],
+                  "attachments": [],
+                  "embeds": [],
+                  "pinned": false,
+                  "type": 0,
+                  "flags": 32768,
+                  "components": [
+                    {
+                      "type": 1,
+                      "components": [
+                        {
+                          "type": 2,
+                          "style": 1,
+                          "custom_id": "continue"
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """
+            let actionRowMessage = try JSONDecoder().decode(
+                DiscordChannel.Message.self,
+                from: Data(actionRowJSON.utf8)
+            )
+            XCTAssertEqual(actionRowMessage.componentsV2?.count, 1)
 
             let interactionJSON = """
                 {

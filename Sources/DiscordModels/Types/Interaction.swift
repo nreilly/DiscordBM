@@ -988,6 +988,37 @@ extension Interaction {
                 components.validate()
                 accessory.validate()
             }
+
+            func validateAsComponentsV2() -> [ValidationFailure] {
+                var failures: [ValidationFailure] = []
+                for component in components {
+                    switch component {
+                    case .textDisplay, .__undocumented:
+                        break
+                    default:
+                        failures.append(
+                            .containsProhibitedValues(
+                                name: "components",
+                                reason: "Contains a component that cannot be used in a section",
+                                valuesRepresentation: "\(component)"
+                            )
+                        )
+                    }
+                }
+                switch accessory {
+                case .button, .thumbnail, .__undocumented:
+                    break
+                default:
+                    failures.append(
+                        .containsProhibitedValues(
+                            name: "accessory",
+                            reason: "Contains a component that cannot be used as a section accessory",
+                            valuesRepresentation: "\(accessory)"
+                        )
+                    )
+                }
+                return failures
+            }
         }
 
         /// https://discord.com/developers/docs/components/reference#text-display
@@ -1134,7 +1165,11 @@ extension Interaction {
         /// https://discord.com/developers/docs/components/reference#container
         public struct Container: Sendable, Codable, ValidatablePayload {
             public var id: Int?
-            public var components: [Component]
+            public var components: [Component] {
+                didSet {
+                    componentsV2 = nil
+                }
+            }
             public var componentsV2: [MessageLayoutComponent]? = nil
             public var accent_color: DiscordColor?
             public var spoiler: Bool?
@@ -1176,13 +1211,12 @@ extension Interaction {
                 self.id = try container.decodeIfPresent(Int.self, forKey: .id)
                 self.accent_color = try container.decodeIfPresent(DiscordColor.self, forKey: .accent_color)
                 self.spoiler = try container.decodeIfPresent(Bool.self, forKey: .spoiler)
-                if let components = try? container.decode([Component].self, forKey: .components) {
-                    self.components = components
-                    self.componentsV2 = nil
-                } else {
-                    self.components = []
-                    self.componentsV2 = try container.decode([MessageLayoutComponent].self, forKey: .components)
+                let componentsV2 = try container.decode([MessageLayoutComponent].self, forKey: .components)
+                self.components = componentsV2.compactMap {
+                    guard case let .component(component) = $0 else { return nil }
+                    return component
                 }
+                self.componentsV2 = componentsV2
             }
 
             public func encode(to encoder: any Encoder) throws {
@@ -1198,14 +1232,11 @@ extension Interaction {
             }
 
             public func validate() -> [ValidationFailure] {
-                componentsV2 != nil && !components.isEmpty
-                    ? ValidationFailure.disallowedField(
-                        name: "components",
-                        reason: "Cannot be used with 'componentsV2'"
-                    )
-                    : nil
-                components.validate()
-                componentsV2?.validateAsContainerChildren()
+                if let componentsV2 {
+                    componentsV2.validateAsContainerChildren()
+                } else {
+                    components.validate()
+                }
             }
         }
 
@@ -1530,6 +1561,51 @@ extension Interaction {
                 case .section, .textDisplay, .thumbnail, .mediaGallery, .file,
                     .separator, .container, .label, .fileUpload, .__undocumented:
                     return nil
+                }
+            }
+
+            public var id: Int? {
+                switch self {
+                case let .button(value):
+                    value.id
+                case let .stringSelect(value):
+                    value.id
+                case let .textInput(value):
+                    value.id
+                case let .userSelect(value):
+                    value.id
+                case let .roleSelect(value):
+                    value.id
+                case let .mentionableSelect(value):
+                    value.id
+                case let .channelSelect(value):
+                    value.id
+                case let .section(value):
+                    value.id
+                case let .textDisplay(value):
+                    value.id
+                case let .thumbnail(value):
+                    value.id
+                case let .mediaGallery(value):
+                    value.id
+                case let .file(value):
+                    value.id
+                case let .separator(value):
+                    value.id
+                case let .container(value):
+                    value.id
+                case let .label(value):
+                    value.id
+                case let .fileUpload(value):
+                    value.id
+                case let .radioGroup(value):
+                    value.id
+                case let .checkboxGroup(value):
+                    value.id
+                case let .checkbox(value):
+                    value.id
+                case .__undocumented:
+                    nil
                 }
             }
 
@@ -1929,8 +2005,7 @@ extension Interaction {
                 case let .button(button):
                     return button.validateAsComponentsV2()
                 case let .section(section):
-                    return section.components.flatMap { $0.validateAsComponentsV2() }
-                        + section.accessory.validateAsComponentsV2()
+                    return section.validateAsComponentsV2()
                 case let .container(container):
                     if let componentsV2 = container.componentsV2 {
                         return componentsV2.flatMap { $0.validateAsComponentsV2() }
@@ -1945,6 +2020,7 @@ extension Interaction {
             }
         }
 
+        public var id: Int?
         public var components: [Component]
 
         public enum CodingError: Swift.Error, CustomStringConvertible {
@@ -1965,6 +2041,7 @@ extension Interaction {
 
         enum CodingKeys: String, CodingKey {
             case type
+            case id
             case components
         }
 
@@ -1974,20 +2051,24 @@ extension Interaction {
             guard type == .actionRow else {
                 throw CodingError.unexpectedComponentKind(type)
             }
+            self.id = try container.decodeIfPresent(Int.self, forKey: .id)
             self.components = try container.decode([Component].self, forKey: .components)
         }
 
         public func encode(to encoder: any Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(Kind.actionRow, forKey: .type)
+            try container.encodeIfPresent(id, forKey: .id)
             try container.encode(self.components, forKey: .components)
         }
 
-        public init(components: [Component]) {
+        public init(id: Int? = nil, components: [Component]) {
+            self.id = id
             self.components = components
         }
 
         public init(arrayLiteral elements: Component...) {
+            self.id = nil
             self.components = elements
         }
 
@@ -2189,6 +2270,10 @@ extension Array where Element == Interaction.MessageLayoutComponent {
     func customIDs() -> [String] {
         flatMap { $0.customIDs() }
     }
+
+    func componentIDs() -> [Int] {
+        flatMap { $0.componentIDs() }
+    }
 }
 
 extension Interaction.MessageLayoutComponent {
@@ -2198,6 +2283,15 @@ extension Interaction.MessageLayoutComponent {
             actionRow.components.customIDs()
         case let .component(component):
             component.customIDs()
+        }
+    }
+
+    func componentIDs() -> [Int] {
+        switch self {
+        case let .actionRow(actionRow):
+            actionRow.componentIDs()
+        case let .component(component):
+            component.componentIDs()
         }
     }
 }
@@ -2213,11 +2307,26 @@ extension Interaction.ModalComponent {
             []
         }
     }
+
+    func componentIDs() -> [Int] {
+        switch self {
+        case let .textDisplay(textDisplay):
+            [textDisplay.id].compactMap { $0 }
+        case let .label(label):
+            [label.id].compactMap { $0 } + label.component.componentIDs()
+        case .__undocumented:
+            []
+        }
+    }
 }
 
 extension Array where Element == Interaction.ModalComponent {
     func customIDs() -> [String] {
         flatMap { $0.customIDs() }
+    }
+
+    func componentIDs() -> [Int] {
+        flatMap { $0.componentIDs() }
     }
 }
 
@@ -2241,11 +2350,41 @@ extension Interaction.ActionRow.Component {
         }
         return customIDs
     }
+
+    func componentIDs() -> [Int] {
+        var componentIDs = [id].compactMap { $0 }
+        switch self {
+        case let .section(section):
+            componentIDs += section.components.componentIDs()
+            componentIDs += section.accessory.componentIDs()
+        case let .container(container):
+            if let componentsV2 = container.componentsV2 {
+                componentIDs += componentsV2.componentIDs()
+            } else {
+                componentIDs += container.components.componentIDs()
+            }
+        case let .label(label):
+            componentIDs += label.component.componentIDs()
+        default:
+            break
+        }
+        return componentIDs
+    }
 }
 
 extension Array where Element == Interaction.ActionRow.Component {
     func customIDs() -> [String] {
         flatMap { $0.customIDs() }
+    }
+
+    func componentIDs() -> [Int] {
+        flatMap { $0.componentIDs() }
+    }
+}
+
+extension Interaction.ActionRow {
+    func componentIDs() -> [Int] {
+        [id].compactMap { $0 } + components.componentIDs()
     }
 }
 

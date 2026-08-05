@@ -515,7 +515,11 @@ extension DiscordChannel {
 
 @propertyWrapper
 public struct IncomingMessageComponents: Sendable, Codable {
-    public var wrappedValue: [Interaction.ActionRow]?
+    public var wrappedValue: [Interaction.ActionRow]? {
+        didSet {
+            componentsV2 = nil
+        }
+    }
     public var projectedValue: Self {
         get { self }
         set { self = newValue }
@@ -542,11 +546,10 @@ public struct IncomingMessageComponents: Sendable, Codable {
                 guard case let .actionRow(actionRow) = $0 else { return nil }
                 return actionRow
             }
-            self.componentsV2 = nil
         } else {
             self.wrappedValue = nil
-            self.componentsV2 = components
         }
+        self.componentsV2 = components
     }
 
     public func encode(to encoder: any Encoder) throws {
