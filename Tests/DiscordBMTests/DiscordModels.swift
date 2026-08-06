@@ -1126,6 +1126,52 @@ class DiscordModelsTests: XCTestCase {
                 """
             let interaction = try JSONDecoder().decode(Interaction.self, from: Data(interactionJSON.utf8))
             XCTAssertEqual(try XCTUnwrap(interaction.message?.componentsV2).count, 1)
+
+            let encodedComponents = try JSONEncoder().encode(IncomingMessageComponents(componentsV2: componentsV2))
+            XCTAssertEqual(
+                try canonicalJSONData(encodedComponents),
+                try canonicalJSONData(
+                    Data(
+                        """
+                        [
+                          {
+                            "type": 17,
+                            "components": [
+                              {
+                                "type": 10,
+                                "content": "Hello"
+                              }
+                            ]
+                          }
+                        ]
+                        """.utf8
+                    )
+                )
+            )
+        }
+
+        do {
+            let json = """
+                [
+                  {
+                    "type": 1,
+                    "components": [
+                      {
+                        "type": 2,
+                        "style": 1,
+                        "label": "Continue",
+                        "custom_id": "continue"
+                      }
+                    ]
+                  }
+                ]
+                """
+            let components = try JSONDecoder().decode(
+                IncomingMessageComponents.self,
+                from: Data(json.utf8)
+            )
+            XCTAssertEqual(components.wrappedValue?.count, 1)
+            XCTAssertNil(components.componentsV2)
         }
     }
 
