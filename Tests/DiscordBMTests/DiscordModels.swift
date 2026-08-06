@@ -434,6 +434,131 @@ class DiscordModelsTests: XCTestCase {
             )
         }
 
+        func assertMessageLayoutComponentsJSONMatchesConstructed(
+            json: String,
+            _ constructed: [Interaction.MessageLayoutComponent],
+            file: StaticString = #filePath,
+            line: UInt = #line
+        ) throws {
+            let decoded = try JSONDecoder().decode(
+                [Interaction.MessageLayoutComponent].self,
+                from: Data(json.utf8)
+            )
+            try assertEncodedJSONEquals(decoded, json: json, file: file, line: line)
+            try assertEncodedJSONEquals(constructed, json: json, file: file, line: line)
+            try assertEncodedJSONEquals(
+                Payloads.CreateMessage(componentsV2: constructed),
+                json: """
+                    {
+                      "flags": 32768,
+                      "components": \(json)
+                    }
+                    """,
+                file: file,
+                line: line
+            )
+        }
+
+        do {
+            let json = """
+                [
+                  {
+                    "type": 9,
+                    "components": [
+                      {
+                        "type": 10,
+                        "content": "Choose an action"
+                      }
+                    ],
+                    "accessory": {
+                      "type": 2,
+                      "style": 1,
+                      "label": "Continue",
+                      "custom_id": "continue"
+                    }
+                  },
+                  {
+                    "type": 12,
+                    "items": [
+                      {
+                        "media": {
+                          "url": "https://example.com/image.png"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "type": 13,
+                    "file": {
+                      "url": "attachment://report.pdf"
+                    }
+                  },
+                  {
+                    "type": 14,
+                    "divider": true
+                  },
+                  {
+                    "type": 17,
+                    "components": [
+                      {
+                        "type": 10,
+                        "content": "Grouped content"
+                      },
+                      {
+                        "type": 1,
+                        "components": [
+                          {
+                            "type": 2,
+                            "style": 2,
+                            "label": "Cancel",
+                            "custom_id": "cancel"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+                """
+
+            let constructed: [Interaction.MessageLayoutComponent] = [
+                .section(
+                    .init(
+                        components: [.textDisplay(.init(content: "Choose an action"))],
+                        accessory: .button(
+                            .init(style: .primary, label: "Continue", custom_id: "continue")
+                        )
+                    )
+                ),
+                .mediaGallery(
+                    .init(items: [.init(media: .init(url: "https://example.com/image.png"))])
+                ),
+                .file(.init(file: .init(url: "attachment://report.pdf"))),
+                .separator(.init(divider: true)),
+                .container(
+                    .init(
+                        componentsV2: [
+                            .textDisplay(.init(content: "Grouped content")),
+                            .actionRow(
+                                .init(
+                                    components: [
+                                        .button(
+                                            .init(
+                                                style: .secondary,
+                                                label: "Cancel",
+                                                custom_id: "cancel"
+                                            )
+                                        )
+                                    ]
+                                )
+                            ),
+                        ]
+                    )
+                ),
+            ]
+
+            try assertMessageLayoutComponentsJSONMatchesConstructed(json: json, constructed)
+        }
+
         do {
             let json = """
                 [
@@ -1171,7 +1296,7 @@ class DiscordModelsTests: XCTestCase {
                 from: Data(json.utf8)
             )
             XCTAssertEqual(components.wrappedValue?.count, 1)
-            XCTAssertNil(components.componentsV2)
+            XCTAssertEqual(components.componentsV2?.count, 1)
         }
     }
 
